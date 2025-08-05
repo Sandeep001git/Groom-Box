@@ -1,0 +1,9 @@
+
+
+##   room / [id] / page.ts -> have room for video and chat
+        -- make request for getting room details
+        -- show ui for room 
+        -> Api route are 
+            => get-room?id  GET
+            => leave-room   DELETE
+
