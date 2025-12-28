@@ -59,6 +59,11 @@ function PublicRooms() {
     roomsListing()
   }, [page, limit, toast])
 
+  console.log(rooms)
+  const  onJoin = async (roomId: any,socketId: any)=>{
+    const res = await axios.get( `/api/join-room/${roomId}/${socketId}` )
+  }
+
   return (
     <div>
       <Table>
@@ -90,12 +95,12 @@ function PublicRooms() {
               <TableRow key={room.id}>
                 <TableCell className="font-medium">{room.name}</TableCell>
                 <TableCell>Paid</TableCell>
-                <TableCell></TableCell>
                 <TableCell className="text-right">{room.adminId}</TableCell>
                 <TableCell className="text-right">
-                  <button className="bg-red-500 px-4 py-2 rounded">
+                  <Button onClick={onJoin(room.id)} 
+                  className="bg-red-500 px-4 py-2 rounded">
                     Join
-                  </button>
+                  </Button>
                 </TableCell>
               </TableRow>
             ))

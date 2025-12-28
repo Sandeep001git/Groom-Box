@@ -1,119 +1,102 @@
-import axios, { AxiosError } from 'axios'
-import {
-    Form,
-    FormControl,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
-} from '@/components/ui/form'
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
-import { useRouter } from 'next/navigation'
-import z from 'zod'
+'use client'
+
 import { useForm } from 'react-hook-form'
-import { Button } from '@/components/ui/button'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { joinRoomSchema } from '@/schema/JoinRoom.schema'
-import { RoomType } from '@/types/TableTypes'
-import { useToast } from './ui/use-toast'
+import { z } from 'zod'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { useToast } from '@/components/ui/use-toast'
+import { useRouter } from 'next/navigation'
 import { io } from 'socket.io-client'
+import axios, { AxiosError } from 'axios'
+import { useState, useRef } from 'react'
+import { RoomType } from '@/types/TableTypes'
 
-export function JoinRoom() {
-    const router = useRouter()
-    const { toast } = useToast()
-    const form = useForm<z.infer<typeof joinRoomSchema>>({
-        resolver: zodResolver(joinRoomSchema),
-        defaultValues: {
-            roomId: '',
-        },
-    })
-    const onSubmit = async (data: z.infer<typeof joinRoomSchema>):Promise<void>=> {
-        const { roomId } = data
-        const socket = io()
-        try {
-            socket.emit('join-room', roomId, async (response: any) => {
-                if (response.error) {
-                    throw new Error(response.error)
-                }
-                const res = await axios.get<RoomType>(
-                    `/api/join-room/${roomId}/${socket.id}`
-                )
-                if (res) {
-                    toast({
-                        title: `${response.data.name} is Joined`,
-                        description: `Redirecting to ${response.data.name} Room `,
-                    })
-                    router.replace(`/room/${roomId}`)
-                }
-            })
-        } catch (error: typeof AxiosError | any) {
-            if (error instanceof AxiosError) {
-                toast({
-                    title: 'Error',
-                    description: error.message,
-                    variant: 'destructive', // Note: Correct spelling is "variant" not "varient"
-                })
-            } else {
-                console.error('An unexpected error occurred', error)
-                throw new Error('Error creating the room ')
-            }
-        }
+type FormValues = z.infer<typeof joinRoomSchema>
+
+export default function JoinRoom() {
+  const router = useRouter()
+  const { toast } = useToast()
+  const [joining, setJoining] = useState(false)
+  const socketRef = useRef<any>(null)
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(joinRoomSchema),
+    defaultValues: { roomId: '' },
+  })
+
+  const onSubmit = async (data: FormValues) => {
+    if (joining) return
+    setJoining(true)
+
+    if (!socketRef.current) {
+      socketRef.current = io()
     }
-    return (
-        <div className="flex bg-white justify-center p-8 m-2 rounded-lg shadow-md border">
-            <Dialog>
-                <DialogTrigger asChild>
-                    <Button variant="outline">Join Room</Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                        <DialogTitle>Edit profile</DialogTitle>
-                        {/* <DialogDescription>
-                            Make changes to your profile here. Click save when
-                            you're done.
-                        </DialogDescription> */}
-                    </DialogHeader>
-                    <Form {...form}>
-                        <form
-                            onSubmit={form.handleSubmit(onSubmit)}
-                            className="space-y-8"
-                        >
-                            <FormField
-                                control={form.control}
-                                name="roomId"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel className="text-white">
-                                            Room Id
-                                        </FormLabel>
-                                        <FormControl>
-                                            <Input
-                                                className="text-white"
-                                                placeholder="eg:- 5256-6332-8522..."
-                                                {...field}
-                                            />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                            <DialogFooter>
-                                <Button type="submit">Save changes</Button>
-                            </DialogFooter>
-                        </form>
-                    </Form>
-                </DialogContent>
-            </Dialog>
-        </div>
-    )
+
+    const socket = socketRef.current
+
+    try {
+      socket.emit('join-room', data.roomId, async (response: any) => {
+        if (response.error) throw new Error(response.error)
+
+        const res = await axios.get<RoomType>(`/api/join-room/${data.roomId}/${socket.id}`)
+
+        toast({
+          title: `Joined ${res.data.name}`,
+          description: 'Redirecting to room…',
+        })
+
+        router.replace(`/room/${data.roomId}`)
+        setJoining(false)
+      })
+    } catch (err: any) {
+      setJoining(false)
+      if (axios.isAxiosError(err)) {
+        toast({ title: 'Error', description: err.message, variant: 'destructive' })
+      } else {
+        toast({ title: 'Error', description: err.message || 'Failed to join room', variant: 'destructive' })
+      }
+    }
+  }
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white shadow-lg hover:scale-[1.03] transition-transform">
+          Join Room
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="rounded-2xl bg-slate-900 text-white border-slate-800">
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-bold">Join a Room</DialogTitle>
+        </DialogHeader>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <FormField
+              control={form.control}
+              name="roomId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Room ID</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="Enter Room ID" className="bg-slate-800 border-slate-700 text-white" disabled={joining} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <DialogFooter>
+              <Button type="submit" disabled={joining}>
+                {joining ? 'Joining…' : 'Join'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  )
 }

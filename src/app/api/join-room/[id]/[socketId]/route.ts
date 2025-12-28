@@ -1,62 +1,68 @@
-import { initializeUserInRoomModels } from '@/models/UserRoom.model'
-import { initializeRoomModels } from '@/models/Room.model'
-import { NextApiRequest, NextApiResponse } from 'next'
-import { getServerSession } from 'next-auth'
-import { RoomType } from '@/types/TableTypes'
+import { initializeUserInRoomModels } from '@/models/UserRoom.model';
+import { initializeRoomModels } from '@/models/Room.model';
+import { getServerSession } from 'next-auth';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(request: NextApiRequest, res: NextApiResponse) {
-    const { roomId, socketId } = await request.query
-    console.log(roomId)
-    const session = await getServerSession()
+export async function GET(
+    _request: NextRequest,
+    { params }: { params: { roomId: string; socketId: string } }
+) {
+    const { roomId, socketId } = params;
+
+    const session = await getServerSession();
+    if (!session?.user?.id) {
+        return NextResponse.json(
+            { success: false, message: 'Not authenticated' },
+            { status: 401 }
+        );
+    }
+
     try {
-        const Room = await initializeRoomModels()
-        const UserInRoom = await initializeUserInRoomModels()
+        const Room = await initializeRoomModels();
+        const UserInRoom = await initializeUserInRoomModels();
         if (!Room || !UserInRoom) {
-            throw new Error('Failed to initialize User In Room instance.')
+            throw new Error('Failed to initialize models.');
         }
-        const isRoomAvaliable:RoomType | null = await Room.findOne({
-            where: { roomId: roomId },
-        })  
-        if (!isRoomAvaliable) {
-            return Response.json({
-                sucess: false,
-                message: 'No Room existed with Id ',
-            })
-        }
-        console.log(isRoomAvaliable)
-        const roomName = isRoomAvaliable.name
-        const userRoom = await UserInRoom.findOne({
-            where: { userId: session?.user.id },
-        })
-        console.log(userRoom)
-        if (!userRoom) {
-            return res.status(401).json({
-                sucess: false,
-                message: 'No User is not existed',
-            })
-        }
-        if(userRoom.isBanned){
-            return res.status(201).json({
-                sucess: false,
-                message: 'User is banned from the group',
-            })
-        }
-        const updateUserRoom = await userRoom.update({
-            name: roomName,
-            roomId: roomId,
-            socket_id: socketId,
-            isAdmin: false,
-        })
 
-        if(updateUserRoom){
-            return res.status(200).json({
-                sucess: true,
-                message: 'You have joined the room',
-            })
+        const isRoomAvailable = await Room.findOne({ where: { id : roomId } });
+        if (!isRoomAvailable) {
+            return NextResponse.json(
+                { success: false, message: 'No Room exists with that ID' },
+                { status: 404 }
+            );
         }
+
+        const userRoom = await UserInRoom.findOne({
+            where: { userId: session.user.id },
+        });
+        if (!userRoom) {
+            return NextResponse.json(
+                { success: false, message: 'User not found in any room' },
+                { status: 404 }
+            );
+        }
+
+// @ts-expect-error
+        if (userRoom.isBanned) {
+            return NextResponse.json(
+                { success: false, message: 'User is banned from this group' },
+                { status: 403 }
+            );
+        }
+
+        await userRoom.update({
+            socket_id: socketId,
+        });
+
+        return NextResponse.json(
+            { success: true, message: 'You have joined the room' },
+            { status: 200 }
+        );
     } catch (error) {
-        return res
-            .status(500)
-            .json({ success: false, message: 'Internal Server Error' })
+        console.error(error);
+        return NextResponse.json(
+            { success: false, message: 'Internal Server Error' },
+            { status: 500 }
+        );
     }
 }

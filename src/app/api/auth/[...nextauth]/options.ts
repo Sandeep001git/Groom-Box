@@ -1,10 +1,8 @@
 import initializeUserModel from '@/models/User.model'
-import ApiMessage from '@/types/ApiMessage'
 import { ApiError } from '@/utils/ApiError'
 import Credentials from 'next-auth/providers/credentials'
 import Github from 'next-auth/providers/github'
 import bcrypt from 'bcryptjs'
-import { UserAttributes } from '@/types/TableTypes'
 import { NextAuthOptions } from 'next-auth'
 
 export const authOptions:NextAuthOptions = {
@@ -75,7 +73,7 @@ export const authOptions:NextAuthOptions = {
         }),
     ],
     pages: {
-        signIn: '/login',
+        signIn: '/sign-in',
     },
     session: {
         strategy: 'jwt',

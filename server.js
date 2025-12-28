@@ -10,24 +10,24 @@ const handle = app.getRequestHandler();
 app.prepare().then(() => {
     const expressApp = express();
     const server = http.createServer(expressApp);
-    const io = new Server(server);
+    const io = new Server(server, {
+        cors: {
+            origin: '*',
+        }
+    });
 
-    // Socket.io logic
+    const pendingRequests = {}; // { requestId: { socketId, roomId, username } }
+
     io.on('connection', (socket) => {
         console.log('A user connected:', socket.id);
 
-        socket.on('offer', (offer) => {
-            socket.broadcast.emit('offer', offer);
-        });
-    
-        socket.on('answer', (answer) => {
-            socket.broadcast.emit('answer', answer);
-        });
-    
-        socket.on('ice-candidate', (candidate) => {
-            socket.broadcast.emit('ice-candidate', candidate);
+        // ===== Create Room =====
+        socket.on('createRoom', (roomId, callback) => {
+            socket.join(roomId);
+            callback({ success: true, socketId: socket.id });
         });
 
+        // ===== Public Join =====
         socket.on('joinRoom', (roomId, callback) => {
             try {
                 socket.join(roomId);
@@ -38,30 +38,55 @@ app.prepare().then(() => {
             }
         });
 
-        socket.on('send-group-message',(data)=>{
-            console.log(data)
-            socket.to(data.roomName).emit('recive-group-message',data);
-        })
+        // ===== Private Join Request =====
+        socket.on('requestJoin', (requestId, roomId, username) => {
+            pendingRequests[requestId] = {
+                socketId: socket.id,
+                roomId,
+                username
+            };
+            console.log(`Join request from ${username} for room ${roomId}`);
+            io.to(roomId).emit('joinRequest', { requestId, username });
+        });
 
-        socket.on('createRoom', (roomId, callback) => {
-            socket.join(roomId); // Socket joins the created room
-            callback({ success: true, socketId: socket.id });
+        // ===== Accept Join =====
+        socket.on('acceptRequest', (requestId) => {
+            const request = pendingRequests[requestId];
+            if (request) {
+                const { socketId, roomId, username } = request;
+                io.to(socketId).emit('requestAccepted', { roomId, username });
+                console.log(`Request accepted for ${username} in room ${roomId}`);
+                delete pendingRequests[requestId];
+            } else {
+                console.log(`No pending request found for ID: ${requestId}`);
+            }
+        });
+
+        // ===== Reject Join =====
+        socket.on('rejectJoin', (requestId) => {
+            const request = pendingRequests[requestId];
+            if (request) {
+                const { socketId, username } = request;
+                io.to(socketId).emit('requestRejected', { username });
+                console.log(`Request rejected for ${username}`);
+                delete pendingRequests[requestId];
+            } else {
+                console.log(`No pending request found for ID: ${requestId}`);
+            }
         });
 
         socket.on('disconnect', () => {
             console.log('A user disconnected:', socket.id);
         });
-
-
     });
 
-    // All other requests are handled by Next.js
+    // Let Next.js handle all other requests
     expressApp.all('*', (req, res) => {
         return handle(req, res);
     });
 
     server.listen(3000, (err) => {
         if (err) throw err;
-        console.log('Server is running on http://localhost:3000');
+        console.log('Server running on http://localhost:3000');
     });
 });

@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getToken } from "next-auth/jwt"
-import { dbConnection } from "./db_config/dbConnection"
 
 export async function middleware(request: NextRequest) {
   try {
-    // Ensure DB is connected
-    await dbConnection()
+
 
     // Check if user has a valid NextAuth session
     const token = await getToken({
